@@ -27,7 +27,9 @@ export const GuitarChordDiagram: React.FC<{ chord: DiatonicChordDiagram }> = ({ 
   const paddingLeft = 18;
   const paddingRight = 18;
   const fretCount = 4;
-  const windowStart = shape.startFret > 1 ? shape.startFret : 0;
+  // Frets are 1-based (fret 1 is the first space after the nut); 0 is only for open strings.
+  // When the nut is shown, the visible window must start at fret 1 so fret 1 maps to the first space.
+  const windowStart = shape.startFret > 1 ? shape.startFret : 1;
   const windowEnd = windowStart + fretCount - 1;
   const showNut = shape.startFret <= 1;
 
