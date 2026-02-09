@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { CurrentKeyData, SpellingMode, Tonality } from '../types';
 import { getChords } from '../utils/musicTheory';
+import { generateSubstitutions } from '../utils/substitutions';
 import { getDiatonicChordDiagrams } from '../utils/guitarChords';
 import { GuitarChordDiagram } from './GuitarChordDiagram';
 
@@ -12,12 +13,20 @@ interface InfoPanelProps {
 export const InfoPanel: React.FC<InfoPanelProps> = ({ currentKey, spellingMode }) => {
   const [activeTab, setActiveTab] = useState<'chords' | 'subs' | 'guitar'>('chords');
   const [tonality, setTonality] = useState<Tonality>('major');
+  const [complexityFilter, setComplexityFilter] = useState<'common' | 'advanced' | 'all'>('common');
+  const [expandedDegrees, setExpandedDegrees] = useState<Record<string, boolean>>({});
   const chords = getChords(currentKey.index, spellingMode);
   const guitarChords = useMemo(
     () => getDiatonicChordDiagrams(currentKey, spellingMode, tonality),
     [currentKey, spellingMode, tonality]
   );
+  const substitutions = useMemo(
+    () => generateSubstitutions(tonality === 'major' ? currentKey.major : currentKey.minor, tonality, spellingMode),
+    [currentKey, tonality, spellingMode]
+  );
   const selectedKeyLabel = tonality === 'major' ? currentKey.major : currentKey.minor;
+  const toggleDegree = (degree: string) =>
+    setExpandedDegrees((prev) => ({ ...prev, [degree]: !prev[degree] }));
 
   return (
     <div className="w-full max-w-2xl mx-auto bg-slate-900/50 backdrop-blur-xl border-t border-white/10 md:border md:rounded-2xl md:mt-8 flex flex-col h-64 md:h-auto overflow-hidden shadow-2xl ring-1 ring-white/5">
@@ -65,12 +74,112 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({ currentKey, spellingMode }
         )}
 
         {activeTab === 'subs' && (
-          <div className="text-center py-8 flex flex-col items-center justify-center h-full">
-            <p className="text-slate-400 mb-4 text-sm uppercase tracking-widest">Tritone Substitution</p>
-            <div className="text-3xl md:text-4xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-500 font-bold mb-6 font-mono">
-              {currentKey.major}7 <span className="text-slate-600 mx-2">→</span> {getTritoneSub(currentKey.index)}7
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Substitution map</h3>
+                <p className="text-sm text-slate-300">
+                  {tonality === 'major' ? 'Major key' : 'Minor key'} substitutions in{' '}
+                  <span className="text-cyan-300 font-semibold">{selectedKeyLabel}</span>
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-widest text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span>Scale</span>
+                  <div className="flex rounded-full border border-white/10 bg-slate-900/60 overflow-hidden">
+                    {(['major', 'minor'] as Tonality[]).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setTonality(mode)}
+                        className={`px-3 py-1 transition-all ${
+                          tonality === mode ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span>Complexity</span>
+                  <div className="flex rounded-full border border-white/10 bg-slate-900/60 overflow-hidden">
+                    {(['common', 'advanced', 'all'] as const).map((level) => (
+                      <button
+                        key={level}
+                        onClick={() => setComplexityFilter(level)}
+                        className={`px-3 py-1 transition-all ${
+                          complexityFilter === level
+                            ? 'bg-cyan-500/20 text-cyan-300'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-slate-600 italic border px-3 py-1 rounded-full border-white/5">Advanced substitutions coming soon</p>
+
+            <div className="space-y-3">
+              {substitutions.map((entry) => {
+                const isOpen = expandedDegrees[entry.degree] ?? (entry.degree === 'I' || entry.degree === 'i');
+                return (
+                  <div
+                    key={entry.degree}
+                    className="bg-slate-800/40 border border-white/5 rounded-xl overflow-hidden"
+                  >
+                    <button
+                      onClick={() => toggleDegree(entry.degree)}
+                      className="w-full text-left p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 hover:bg-slate-800/60 transition-colors"
+                    >
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-cyan-400/80">{entry.degree}</p>
+                        <p className="text-lg font-semibold text-slate-100">{entry.chord}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-400 bg-slate-900/60 px-2 py-1 rounded-full">
+                          {entry.functionFamily}
+                        </span>
+                        <span className="text-xs text-slate-400">{isOpen ? 'Hide' : 'Show'}</span>
+                      </div>
+                    </button>
+                    {isOpen && (
+                      <div className="px-4 pb-4 space-y-4">
+                        {entry.groups.map((group) => {
+                          const filtered = group.items.filter((item) =>
+                            complexityFilter === 'all' ? true : item.complexity === complexityFilter
+                          );
+                          if (filtered.length === 0) return null;
+                          return (
+                            <div key={group.id} className="space-y-2">
+                              <p className="text-xs uppercase tracking-widest text-slate-500">{group.label}</p>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {filtered.map((item) => (
+                                  <div
+                                    key={`${group.id}-${item.chord}`}
+                                    className="bg-slate-900/70 border border-white/5 rounded-lg p-3 text-sm text-slate-200"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-semibold text-slate-100">{item.chord}</span>
+                                      <span className="text-[10px] uppercase tracking-widest text-slate-500">
+                                        {item.complexity}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-1">{item.reason}</p>
+                                    <p className="text-xs text-slate-500 mt-1">{item.resolvesTo}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -112,21 +221,4 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({ currentKey, spellingMode }
       </div>
     </div>
   );
-};
-
-// Simple helper for tritone stub
-const getTritoneSub = (index: number) => {
-  // Tritone is 6 steps away (half circle)
-  // Logic is purely for display placeholder
-  const tritoneIndex = (index + 6) % 12;
-  const roots = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
-  // Map circle index back to chromatic root is complex because circle jumps by 5ths.
-  // Circle: C(0), G(1), D(2), A(3), E(4), B(5), F#(6), Db(7), Ab(8), Eb(9), Bb(10), F(11)
-  // Chromatic values relative to C=0:
-  // C=0, G=7, D=2, A=9, E=4, B=11, F#=6, Db=1, Ab=8, Eb=3, Bb=10, F=5
-  // It's just a placeholder string return for now based on Circle index + 6
-  // Circle Index + 6 is the key exactly opposite.
-  // Opposite of C (0) is F# (6).
-  const oppositeLabels = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
-  return oppositeLabels[tritoneIndex];
 };
