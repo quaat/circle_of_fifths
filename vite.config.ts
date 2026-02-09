@@ -4,7 +4,10 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
+    const repo = process.env.GITHUB_REPOSITORY?.split('/')[1];
+    const isUserPage = repo?.endsWith('.github.io');
     return {
+      base: mode === 'production' ? (repo && !isUserPage ? `/${repo}/` : '/') : '/',
       server: {
         port: 3000,
         host: '0.0.0.0',
