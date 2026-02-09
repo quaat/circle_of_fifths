@@ -8,9 +8,20 @@ import { GuitarChordDiagram } from './GuitarChordDiagram';
 interface InfoPanelProps {
   currentKey: CurrentKeyData;
   spellingMode: SpellingMode;
+  containerClassName?: string;
+  headerProps?: React.HTMLAttributes<HTMLDivElement>;
+  contentProps?: React.HTMLAttributes<HTMLDivElement>;
+  contentRef?: React.Ref<HTMLDivElement>;
 }
 
-export const InfoPanel: React.FC<InfoPanelProps> = ({ currentKey, spellingMode }) => {
+export const InfoPanel: React.FC<InfoPanelProps> = ({
+  currentKey,
+  spellingMode,
+  containerClassName = '',
+  headerProps,
+  contentProps,
+  contentRef,
+}) => {
   const [activeTab, setActiveTab] = useState<'chords' | 'subs' | 'guitar'>('chords');
   const [tonality, setTonality] = useState<Tonality>('major');
   const [complexityFilter, setComplexityFilter] = useState<'common' | 'advanced' | 'all'>('common');
@@ -28,10 +39,13 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({ currentKey, spellingMode }
   const toggleDegree = (degree: string) =>
     setExpandedDegrees((prev) => ({ ...prev, [degree]: !prev[degree] }));
 
+  const { className: headerClassName, ...restHeaderProps } = headerProps ?? {};
+  const { className: contentClassName, ...restContentProps } = contentProps ?? {};
+
   return (
-    <div className="w-full max-w-2xl mx-auto bg-slate-900/50 backdrop-blur-xl border-t border-white/10 md:border md:rounded-2xl md:mt-8 flex flex-col h-64 md:h-auto overflow-hidden shadow-2xl ring-1 ring-white/5">
+    <div className={`w-full max-w-2xl mx-auto flex flex-col h-full ${containerClassName}`}>
       {/* Tabs */}
-      <div className="flex border-b border-white/10">
+      <div className={`flex border-b border-white/10 ${headerClassName ?? ''}`} {...restHeaderProps}>
         {[
           { id: 'chords', label: 'Chords' },
           { id: 'subs', label: 'Substitutions' },
@@ -55,7 +69,11 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({ currentKey, spellingMode }
       </div>
 
       {/* Content */}
-      <div className="p-4 md:p-6 overflow-y-auto no-scrollbar flex-1 bg-gradient-to-b from-transparent to-slate-900/30">
+      <div
+        ref={contentRef}
+        className={`p-4 md:p-6 overflow-y-auto no-scrollbar flex-1 bg-gradient-to-b from-transparent to-slate-900/30 ${contentClassName ?? ''}`}
+        {...restContentProps}
+      >
         {activeTab === 'chords' && (
           <div className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-2">
