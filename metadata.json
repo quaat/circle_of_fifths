@@ -1,0 +1,5 @@
+{
+  "name": "Circle of Fifths Interactive",
+  "description": "A modern, interactive visualization of the Circle of Fifths with a rotating dial, reading rule overlay, and music theory insights.",
+  "requestFramePermissions": []
+}
