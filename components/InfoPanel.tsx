@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { CurrentKeyData, SpellingMode } from '../types';
+import React, { useMemo, useState } from 'react';
+import { CurrentKeyData, SpellingMode, Tonality } from '../types';
 import { getChords } from '../utils/musicTheory';
+import { getDiatonicChordDiagrams } from '../utils/guitarChords';
+import { GuitarChordDiagram } from './GuitarChordDiagram';
 
 interface InfoPanelProps {
   currentKey: CurrentKeyData;
@@ -9,7 +11,13 @@ interface InfoPanelProps {
 
 export const InfoPanel: React.FC<InfoPanelProps> = ({ currentKey, spellingMode }) => {
   const [activeTab, setActiveTab] = useState<'chords' | 'subs' | 'guitar'>('chords');
+  const [tonality, setTonality] = useState<Tonality>('major');
   const chords = getChords(currentKey.index, spellingMode);
+  const guitarChords = useMemo(
+    () => getDiatonicChordDiagrams(currentKey, spellingMode, tonality),
+    [currentKey, spellingMode, tonality]
+  );
+  const selectedKeyLabel = tonality === 'major' ? currentKey.major : currentKey.minor;
 
   return (
     <div className="w-full max-w-2xl mx-auto bg-slate-900/50 backdrop-blur-xl border-t border-white/10 md:border md:rounded-2xl md:mt-8 flex flex-col h-64 md:h-auto overflow-hidden shadow-2xl ring-1 ring-white/5">
@@ -67,18 +75,38 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({ currentKey, spellingMode }
         )}
 
         {activeTab === 'guitar' && (
-          <div className="flex flex-col items-center justify-center py-4 h-full opacity-60 hover:opacity-100 transition-opacity">
-            <div className="w-20 h-32 border-2 border-slate-700 rounded-lg mb-4 flex items-center justify-center bg-slate-800/20 relative overflow-hidden">
-               {/* Fret lines visual */}
-               <div className="absolute inset-0 flex flex-col justify-between py-2">
-                 {[1,2,3,4].map(k => <div key={k} className="w-full h-px bg-slate-700"></div>)}
-               </div>
-               <div className="absolute inset-0 flex justify-between px-2">
-                 {[1,2,3].map(k => <div key={k} className="h-full w-px bg-slate-700"></div>)}
-               </div>
-               <span className="text-slate-600 text-xs font-mono relative z-10 bg-slate-900/80 px-1 rounded">FRET 1</span>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Guitar Diatonic Chords</h3>
+                <p className="text-sm text-slate-300">
+                  {tonality === 'major' ? 'Major key' : 'Minor key'} shapes in{' '}
+                  <span className="text-cyan-300 font-semibold">{selectedKeyLabel}</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-slate-500">
+                <span>Scale</span>
+                <div className="flex rounded-full border border-white/10 bg-slate-900/60 overflow-hidden">
+                  {(['major', 'minor'] as Tonality[]).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setTonality(mode)}
+                      className={`px-3 py-1 transition-all ${
+                        tonality === mode ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-slate-400">Chord diagrams for <span className="text-cyan-400 font-bold">{currentKey.major}</span> coming soon.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {guitarChords.map((chord) => (
+                <GuitarChordDiagram key={chord.id} chord={chord} />
+              ))}
+            </div>
           </div>
         )}
       </div>
