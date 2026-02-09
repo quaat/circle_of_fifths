@@ -47,9 +47,9 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
       {/* Tabs */}
       <div className={`flex border-b border-white/10 ${headerClassName ?? ''}`} {...restHeaderProps}>
         {[
-          { id: 'chords', label: 'Chords' },
+          { id: 'guitar', label: 'Chord Chart' },
           { id: 'subs', label: 'Substitutions' },
-          { id: 'guitar', label: 'Guitar' },
+          { id: 'chords', label: 'Progressions' },
         ].map((tab) => (
           <button
             key={tab.id}
