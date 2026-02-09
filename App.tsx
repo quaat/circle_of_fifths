@@ -1,10 +1,11 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Dial } from './components/Dial';
 import { Overlay } from './components/Overlay';
 import { InfoPanel } from './components/InfoPanel';
+import { BottomSheet } from './components/BottomSheet';
 import { getContextKeys, getIndexFromRotation, snapRotationToIndex } from './utils/musicTheory';
 import { SpellingMode } from './types';
-import { ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function App() {
   const [rotation, setRotation] = useState(0);
@@ -96,9 +97,17 @@ export default function App() {
         </div>
 
         {/* Info Panel */}
-        <div className="w-full px-4 pb-4 md:pb-8 flex-1 flex flex-col justify-end z-10">
-           <InfoPanel currentKey={contextKeys.center} spellingMode={spellingMode} />
-        </div>
+        <BottomSheet>
+          {({ headerProps, contentProps, contentRef }) => (
+            <InfoPanel
+              currentKey={contextKeys.center}
+              spellingMode={spellingMode}
+              headerProps={headerProps}
+              contentProps={contentProps}
+              contentRef={contentRef}
+            />
+          )}
+        </BottomSheet>
       </main>
     </div>
   );
