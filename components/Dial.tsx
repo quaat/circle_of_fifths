@@ -1,165 +1,109 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { SpellingMode } from '../types';
-import { getKeyDataAtIndex } from '../utils/musicTheory';
+import React, { useRef, useState } from 'react';
+import { SpellingMode, Tonality } from '../types';
+import { getIndexFromRotation, getKeyDataAtIndex } from '../utils/musicTheory';
+import { angleDelta } from '../utils/dialInteraction';
 
 interface DialProps {
   rotation: number;
-  setRotation: (r: number) => void;
-  onDragEnd: () => void;
+  setRotation: (rotation: number) => void;
+  onDragEnd: (rotation: number) => void;
+  onSelectKey: (index: number, tonality: Tonality) => void;
   spellingMode: SpellingMode;
+  tonality: Tonality;
+  onDraggingChange?: (dragging: boolean) => void;
+}
+interface Drag {
+  pointerId: number;
+  angle: number;
+  rotation: number;
+  travel: number;
+  selection: { index: number; tonality: Tonality } | null;
 }
 
-export const Dial: React.FC<DialProps> = ({ rotation, setRotation, onDragEnd, spellingMode }) => {
-  const dialRef = useRef<SVGSVGElement>(null);
+export const Dial: React.FC<DialProps> = ({ rotation, setRotation, onDragEnd, onSelectKey, spellingMode, tonality, onDraggingChange }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const dragRef = useRef<Drag | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartAngle = useRef<number>(0);
-  const dragStartRotation = useRef<number>(0);
-
-  // Helper to get angle from center
-  const getAngle = (clientX: number, clientY: number) => {
-    if (!dialRef.current) return 0;
-    const rect = dialRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    return Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
+  const currentIndex = getIndexFromRotation(rotation);
+  const getAngle = (x: number, y: number) => {
+    const rect = svgRef.current!.getBoundingClientRect();
+    return Math.atan2(y - (rect.top + rect.height / 2), x - (rect.left + rect.width / 2)) * 180 / Math.PI;
   };
-
-  const handlePointerDown = (e: React.PointerEvent) => {
+  const start = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (dragRef.current || event.button !== 0) return;
+    const target = (event.target as Element).closest('[data-key-index]');
+    dragRef.current = {
+      pointerId: event.pointerId, angle: getAngle(event.clientX, event.clientY), rotation, travel: 0,
+      selection: target ? { index: Number(target.getAttribute('data-key-index')), tonality: target.getAttribute('data-tonality') as Tonality } : null,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
     setIsDragging(true);
-    dialRef.current?.setPointerCapture(e.pointerId);
-    dragStartAngle.current = getAngle(e.clientX, e.clientY);
-    dragStartRotation.current = rotation;
+    onDraggingChange?.(true);
   };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
-    e.preventDefault();
-    const currentAngle = getAngle(e.clientX, e.clientY);
-    const delta = currentAngle - dragStartAngle.current;
-    setRotation(dragStartRotation.current + delta);
+  const move = (event: React.PointerEvent<SVGSVGElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    const angle = getAngle(event.clientX, event.clientY);
+    const delta = angleDelta(drag.angle, angle);
+    drag.angle = angle;
+    drag.rotation += delta;
+    drag.travel += Math.abs(delta);
+    if (drag.travel > 3) setRotation(drag.rotation);
   };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
+  const finish = (event: React.PointerEvent<SVGSVGElement>, cancelled = false) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
     setIsDragging(false);
-    dialRef.current?.releasePointerCapture(e.pointerId);
-    onDragEnd();
+    onDraggingChange?.(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (!cancelled && drag.travel <= 3 && drag.selection) onSelectKey(drag.selection.index, drag.selection.tonality);
+    else onDragEnd(drag.rotation);
   };
-
-  // Generate SVG Paths
-  const renderSegments = useMemo(() => {
-    const segments = [];
-    const radiusOuter = 140;
-    const radiusMid = 90; // Boundary between Major and Minor
-    const radiusInner = 50; // Inner hole
-    
-    for (let i = 0; i < 12; i++) {
-      const startAngle = (i * 30 - 15 - 90) * (Math.PI / 180); // -90 to start at 12 o'clock visual logic for 0 index?
-      // Actually index 0 is at rotation 0.
-      // SVG 0 deg is 3 o'clock. 
-      // We want index 0 (C) at 12 o'clock. So rotate entire group -90deg.
-      // Or just compute coordinates with -90 offset.
-      
-      const endAngle = (i * 30 + 15 - 90) * (Math.PI / 180);
-
-      // Helper for arc path
-      const createArc = (rInner: number, rOuter: number) => {
-        const x1 = Math.cos(startAngle) * rOuter;
-        const y1 = Math.sin(startAngle) * rOuter;
-        const x2 = Math.cos(endAngle) * rOuter;
-        const y2 = Math.sin(endAngle) * rOuter;
-        
-        const x3 = Math.cos(endAngle) * rInner;
-        const y3 = Math.sin(endAngle) * rInner;
-        const x4 = Math.cos(startAngle) * rInner;
-        const y4 = Math.sin(startAngle) * rInner;
-
-        return `M ${x1} ${y1} A ${rOuter} ${rOuter} 0 0 1 ${x2} ${y2} L ${x3} ${y3} A ${rInner} ${rInner} 0 0 0 ${x4} ${y4} Z`;
-      };
-
-      // Major Segment (Outer)
-      segments.push(
-        <path
-          key={`major-${i}`}
-          d={createArc(radiusMid, radiusOuter)}
-          className="fill-slate-800 stroke-slate-900 stroke-[1px] transition-colors duration-300 hover:fill-slate-700"
-        />
-      );
-
-      // Minor Segment (Inner)
-      segments.push(
-        <path
-          key={`minor-${i}`}
-          d={createArc(radiusInner, radiusMid)}
-          className="fill-slate-900 stroke-slate-800 stroke-[1px] transition-colors duration-300 hover:fill-slate-800"
-        />
-      );
-
-      // Text Labels
-      // Angle for text center
-      const textAngleRad = (i * 30 - 90) * (Math.PI / 180);
-      const textRadiusMajor = (radiusOuter + radiusMid) / 2;
-      const textRadiusMinor = (radiusMid + radiusInner) / 2;
-
-      // Rotate text to be upright or radial? Upright is easier to read.
-      // We will rotate the whole group by `rotation` state. 
-      // The text inside should probably be oriented radially or upright?
-      // User asked for "Readable". Usually upright relative to the viewer is best, but difficult on a spinning wheel.
-      // Standard circle of fifths wheels often have text aligned radially.
-      
-      const labelData = getKeyDataAtIndex(i, spellingMode);
-      const majorLabel = labelData.major;
-      const minorLabel = labelData.minor;
-
-      segments.push(
-        <g key={`text-${i}`}>
-          {/* Major Label */}
-          <text
-            x={Math.cos(textAngleRad) * textRadiusMajor}
-            y={Math.sin(textAngleRad) * textRadiusMajor}
-            className="fill-white text-[14px] font-bold pointer-events-none select-none"
-            textAnchor="middle"
-            dominantBaseline="middle"
-            transform={`rotate(${i * 30}, ${Math.cos(textAngleRad) * textRadiusMajor}, ${Math.sin(textAngleRad) * textRadiusMajor})`}
-          >
-            {majorLabel}
-          </text>
-          
-          {/* Minor Label */}
-          <text
-            x={Math.cos(textAngleRad) * textRadiusMinor}
-            y={Math.sin(textAngleRad) * textRadiusMinor}
-            className="fill-slate-400 text-[10px] font-medium pointer-events-none select-none"
-            textAnchor="middle"
-            dominantBaseline="middle"
-            transform={`rotate(${i * 30}, ${Math.cos(textAngleRad) * textRadiusMinor}, ${Math.sin(textAngleRad) * textRadiusMinor})`}
-          >
-            {minorLabel}
-          </text>
-        </g>
-      );
-    }
-    return segments;
-  }, [spellingMode]);
-
+  const keyboard = (event: React.KeyboardEvent, index: number, mode: Tonality) => {
+    const next = event.key === 'ArrowRight' ? (index + 1) % 12 : event.key === 'ArrowLeft' ? (index + 11) % 12 : event.key === 'Home' ? 0 : event.key === 'End' ? 11 : event.key === 'Enter' || event.key === ' ' ? index : null;
+    if (next === null) return;
+    event.preventDefault();
+    onSelectKey(next, mode);
+    svgRef.current?.querySelector<SVGElement>(`[data-key-index="${next}"][data-tonality="${mode}"]`)?.focus();
+  };
+  const arc = (index: number, inner: number, outer: number) => {
+    const start = (index * 30 - 105) * Math.PI / 180;
+    const end = (index * 30 - 75) * Math.PI / 180;
+    const xy = (angle: number, radius: number) => `${Math.cos(angle) * radius} ${Math.sin(angle) * radius}`;
+    return `M ${xy(start, outer)} A ${outer} ${outer} 0 0 1 ${xy(end, outer)} L ${xy(end, inner)} A ${inner} ${inner} 0 0 0 ${xy(start, inner)} Z`;
+  };
   return (
-    <div className="relative w-[320px] h-[320px] md:w-[400px] md:h-[400px] touch-none select-none flex items-center justify-center">
-      {/* Container for shadows */}
-      <div className="absolute inset-0 rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] bg-slate-950 rounded-full" />
-      
-      <svg
-        ref={dialRef}
-        viewBox="-150 -150 300 300"
+    <div className="relative w-[min(320px,100vw)] aspect-square md:w-[400px] touch-none select-none flex items-center justify-center">
+      <svg ref={svgRef} role="group" aria-label="Circle of fifths. Select a key or use arrow keys." viewBox="-150 -150 300 300"
         className="w-full h-full cursor-grab active:cursor-grabbing will-change-transform"
-        style={{
-          transform: `rotate(${rotation}deg)`,
-          transition: isDragging ? 'none' : 'transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-      >
-        <g>{renderSegments}</g>
+        style={{ transform: `rotate(${rotation}deg)`, transition: isDragging ? 'none' : 'transform 300ms ease-out' }}
+        onPointerDown={start} onPointerMove={move} onPointerUp={event => finish(event)}
+        onPointerCancel={event => finish(event, true)} onLostPointerCapture={event => finish(event, true)}>
+        {Array.from({ length: 12 }, (_, index) => {
+          const key = getKeyDataAtIndex(index, spellingMode);
+          const angle = (index * 30 - 90) * Math.PI / 180;
+          return (['major', 'minor'] as const).map(mode => {
+            const major = mode === 'major';
+            const selected = index === currentIndex && mode === tonality;
+            const radius = major ? 115 : 70;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+            const name = major ? `${key.major} major` : `${key.minor.slice(0, -1)} minor`;
+            return <g key={`${index}-${mode}`}>
+              <path d={arc(index, major ? 90 : 50, major ? 140 : 90)} role="button" aria-label={name}
+                aria-pressed={selected} tabIndex={selected ? 0 : -1} data-key-index={index} data-tonality={mode}
+                onKeyDown={event => keyboard(event, index, mode)}
+                onClick={event => { if (event.detail === 0) onSelectKey(index, mode); }}
+                className={`${selected ? 'fill-cyan-900 stroke-cyan-300 stroke-2' : major ? 'fill-slate-800 stroke-slate-900' : 'fill-slate-900 stroke-slate-800'} hover:fill-slate-700 focus-visible:stroke-white focus-visible:stroke-[3px]`} />
+              <text pointerEvents="none" x={x} y={y} textAnchor="middle" dominantBaseline="middle" aria-hidden="true"
+                className={`${major ? 'fill-white text-[13px] font-bold' : 'fill-slate-300 text-[10px]'} pointer-events-none select-none`}
+                transform={`rotate(${-rotation}, ${x}, ${y})`}>{major ? key.major : key.minor}</text>
+              {selected && <circle cx={Math.cos(angle) * (major ? 133 : 84)} cy={Math.sin(angle) * (major ? 133 : 84)} r="2" pointerEvents="none" className="fill-white pointer-events-none" aria-hidden="true" />}
+            </g>;
+          });
+        })}
       </svg>
     </div>
   );

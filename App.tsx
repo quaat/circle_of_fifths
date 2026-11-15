@@ -5,10 +5,12 @@ import { InfoPanel } from './components/InfoPanel';
 import { BottomSheet } from './components/BottomSheet';
 import { getContextKeys, getIndexFromRotation, snapRotationToIndex } from './utils/musicTheory';
 import { SpellingMode, Tonality } from './types';
+import { rotationForIndex } from './utils/dialInteraction';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function App() {
   const [rotation, setRotation] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const [tonality, setTonality] = useState<Tonality>('major');
   const [spellingMode, setSpellingMode] = useState<SpellingMode>(SpellingMode.Auto);
   
@@ -16,30 +18,20 @@ export default function App() {
   const currentIndex = getIndexFromRotation(rotation);
   const contextKeys = useMemo(() => getContextKeys(currentIndex, spellingMode), [currentIndex, spellingMode]);
 
-  // Snap to nearest segment when drag ends
-  const handleDragEnd = useCallback(() => {
-    const snapped = snapRotationToIndex(rotation);
-    setRotation(snapped);
-  }, [rotation]);
-
-  // Step controls
+  const handleDragEnd = useCallback((latestRotation: number) => {
+    setRotation(snapRotationToIndex(latestRotation));
+  }, []);
+  const selectKey = (index: number, mode: Tonality) => {
+    setRotation(previous => rotationForIndex(previous, index));
+    setTonality(mode);
+  };
   const rotateStep = (direction: 'left' | 'right') => {
-    const step = 30;
-    const currentSnap = snapRotationToIndex(rotation);
-    // Left button (CCW dial movement) -> moves logical index UP (Clockwise on circle representation) -> wait
-    // If dial moves CCW (-30deg), the item at 1 o'clock moves to 12 o'clock.
-    // Logic: Rotation -30deg = Index +1.
-    // User wants "Rotate one step clockwise from C selects G".
-    // C is top. G is right.
-    // If I rotate Dial CCW, G moves to Top.
-    // So "Select G" (Right neighbor) means rotate Dial Left (CCW).
-    const newRotation = direction === 'right' ? currentSnap - step : currentSnap + step;
-    setRotation(newRotation);
+    setRotation(previous => snapRotationToIndex(previous) + (direction === 'right' ? -30 : 30));
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500/30 overflow-hidden flex flex-col">
-      <p className="sr-only" role="status" aria-live="polite">Selected key: {tonality === 'major' ? `${contextKeys.center.major} major` : `${contextKeys.center.minor.slice(0, -1)} minor`}</p>
+      <p className="sr-only" role="status" aria-live={isDragging ? 'off' : 'polite'}>Selected key: {tonality === 'major' ? `${contextKeys.center.major} major` : `${contextKeys.center.minor.slice(0, -1)} minor`}</p>
       {/* Header / Controls */}
       <header className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-30 pointer-events-none">
         <h1 className="text-lg font-bold tracking-tight text-slate-400 pointer-events-auto">Circle of Fifths</h1>
@@ -82,7 +74,7 @@ export default function App() {
             <button 
               onClick={() => rotateStep('left')}
               className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700/80 text-slate-300 border border-white/10 backdrop-blur transition-all active:scale-95"
-              aria-label="Rotate Counter-Clockwise"
+              aria-label="Previous key on the circle"
             >
               <ChevronLeft size={24} />
             </button>
@@ -91,7 +83,7 @@ export default function App() {
             <button 
               onClick={() => rotateStep('right')}
               className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700/80 text-slate-300 border border-white/10 backdrop-blur transition-all active:scale-95"
-              aria-label="Rotate Clockwise"
+              aria-label="Next key on the circle"
             >
               <ChevronRight size={24} />
             </button>
@@ -102,6 +94,9 @@ export default function App() {
             rotation={rotation} 
             setRotation={setRotation} 
             onDragEnd={handleDragEnd}
+            onSelectKey={selectKey}
+            tonality={tonality}
+            onDraggingChange={setIsDragging}
             spellingMode={spellingMode}
           />
         </div>
