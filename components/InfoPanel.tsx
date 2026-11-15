@@ -181,10 +181,12 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
                                     <div className="flex items-center justify-between gap-2">
                                       <span className="font-semibold text-slate-100">{item.chord}</span>
                                       <span className="text-[10px] uppercase tracking-widest text-slate-500">
-                                        {item.complexity}
+                                        {item.relation} · {item.complexity}
                                       </span>
                                     </div>
                                     <p className="text-xs text-slate-400 mt-1">{item.reason}</p>
+                                    <p className="text-xs text-slate-300 mt-2">{item.example}</p>
+                                    <p className="text-xs text-slate-400 mt-1">Source: {item.source}</p>
                                     <p className="text-xs text-slate-500 mt-1">{item.resolvesTo}</p>
                                   </div>
                                 ))}
