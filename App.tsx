@@ -1,19 +1,20 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Dial } from './components/Dial';
 import { Overlay } from './components/Overlay';
 import { InfoPanel } from './components/InfoPanel';
 import { BottomSheet } from './components/BottomSheet';
 import { getContextKeys, getIndexFromRotation, snapRotationToIndex } from './utils/musicTheory';
-import { SpellingMode } from './types';
+import { SpellingMode, Tonality } from './types';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function App() {
   const [rotation, setRotation] = useState(0);
+  const [tonality, setTonality] = useState<Tonality>('major');
   const [spellingMode, setSpellingMode] = useState<SpellingMode>(SpellingMode.Auto);
   
   // Calculate current state derived from rotation
   const currentIndex = getIndexFromRotation(rotation);
-  const contextKeys = getContextKeys(currentIndex, spellingMode);
+  const contextKeys = useMemo(() => getContextKeys(currentIndex, spellingMode), [currentIndex, spellingMode]);
 
   // Snap to nearest segment when drag ends
   const handleDragEnd = useCallback(() => {
@@ -38,15 +39,23 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500/30 overflow-hidden flex flex-col">
+      <p className="sr-only" role="status" aria-live="polite">Selected key: {tonality === 'major' ? `${contextKeys.center.major} major` : `${contextKeys.center.minor.slice(0, -1)} minor`}</p>
       {/* Header / Controls */}
       <header className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-30 pointer-events-none">
         <h1 className="text-lg font-bold tracking-tight text-slate-400 pointer-events-auto">Circle of Fifths</h1>
         
+        <div className="flex flex-col items-end gap-2 pointer-events-auto">
+        <div role="group" aria-label="Tonality" className="flex gap-1 rounded-lg bg-slate-900/80 p-1">
+          {(['major', 'minor'] as const).map(mode => (
+            <button key={mode} aria-pressed={tonality === mode} onClick={() => setTonality(mode)} className={`px-3 py-2 text-sm rounded ${tonality === mode ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-300'}`}>{mode}</button>
+          ))}
+        </div>
         {/* Spelling Toggle */}
         <div className="pointer-events-auto bg-slate-900/80 backdrop-blur border border-white/10 rounded-lg p-1 flex gap-1">
           {[SpellingMode.Auto, SpellingMode.Sharps, SpellingMode.Flats].map(mode => (
             <button
               key={mode}
+              aria-pressed={spellingMode === mode}
               onClick={() => setSpellingMode(mode)}
               className={`px-3 py-1 text-xs rounded transition-all ${
                 spellingMode === mode 
@@ -57,6 +66,7 @@ export default function App() {
               {mode}
             </button>
           ))}
+        </div>
         </div>
       </header>
 
@@ -101,6 +111,7 @@ export default function App() {
           {({ headerProps, contentProps, contentRef }) => (
             <InfoPanel
               currentKey={contextKeys.center}
+              tonality={tonality}
               spellingMode={spellingMode}
               headerProps={headerProps}
               contentProps={contentProps}

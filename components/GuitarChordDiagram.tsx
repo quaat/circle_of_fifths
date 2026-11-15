@@ -49,7 +49,7 @@ export const GuitarChordDiagram: React.FC<{ chord: DiatonicChordDiagram }> = ({ 
         <div className="text-sm font-semibold text-slate-100">{chord.name}</div>
         <div className="text-[10px] font-mono uppercase tracking-wide text-slate-500">{chord.degree}</div>
       </div>
-      <svg width={width} height={height} className="block">
+      <svg role="img" aria-label={`${chord.name}, degree ${chord.degree}. Standard tuning E A D G B E, low to high. Frets: ${shape.frets.join(", ")}; x means muted, 0 means open. Fingers: ${shape.fingers.map(f => f ?? "none").join(", ")}.`} width={width} height={height} className="block">
         {Array.from({ length: 6 }).map((_, stringIndex) => (
           <line
             key={`string-${stringIndex}`}

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { CurrentKeyData, SpellingMode, Tonality } from '../types';
 import { getChords } from '../utils/musicTheory';
 import { generateSubstitutions } from '../utils/substitutions';
@@ -8,6 +8,7 @@ import { GuitarChordDiagram } from './GuitarChordDiagram';
 interface InfoPanelProps {
   currentKey: CurrentKeyData;
   spellingMode: SpellingMode;
+  tonality: Tonality;
   containerClassName?: string;
   headerProps?: React.HTMLAttributes<HTMLDivElement>;
   contentProps?: React.HTMLAttributes<HTMLDivElement>;
@@ -17,27 +18,28 @@ interface InfoPanelProps {
 export const InfoPanel: React.FC<InfoPanelProps> = ({
   currentKey,
   spellingMode,
+  tonality,
   containerClassName = '',
   headerProps,
   contentProps,
   contentRef,
 }) => {
   const [activeTab, setActiveTab] = useState<'chords' | 'subs' | 'guitar'>('chords');
-  const [tonality, setTonality] = useState<Tonality>('major');
+  const panelId = useId();
   const [complexityFilter, setComplexityFilter] = useState<'common' | 'advanced' | 'all'>('common');
   const [expandedDegrees, setExpandedDegrees] = useState<Record<string, boolean>>({});
-  const chords = getChords(currentKey.index, spellingMode);
+  const chords = getChords(currentKey.index, spellingMode, tonality);
   const guitarChords = useMemo(
-    () => getDiatonicChordDiagrams(currentKey, spellingMode, tonality),
-    [currentKey, spellingMode, tonality]
+    () => activeTab === 'guitar' ? getDiatonicChordDiagrams(currentKey, spellingMode, tonality) : [],
+    [currentKey, spellingMode, tonality, activeTab]
   );
   const substitutions = useMemo(
-    () => generateSubstitutions(tonality === 'major' ? currentKey.major : currentKey.minor, tonality, spellingMode),
-    [currentKey, tonality, spellingMode]
+    () => activeTab === 'subs' ? generateSubstitutions(tonality === 'major' ? currentKey.major : currentKey.minor, tonality, spellingMode) : [],
+    [currentKey, tonality, spellingMode, activeTab]
   );
   const selectedKeyLabel = tonality === 'major' ? currentKey.major : currentKey.minor;
   const toggleDegree = (degree: string) =>
-    setExpandedDegrees((prev) => ({ ...prev, [degree]: !prev[degree] }));
+    setExpandedDegrees((prev) => ({ ...prev, [degree]: !(prev[degree] ?? (degree === 'I' || degree === 'i')) }));
 
   const { className: headerClassName, ...restHeaderProps } = headerProps ?? {};
   const { className: contentClassName, ...restContentProps } = contentProps ?? {};
@@ -45,16 +47,28 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
   return (
     <div className={`w-full max-w-2xl mx-auto flex flex-col h-full ${containerClassName}`}>
       {/* Tabs */}
-      <div className={`flex border-b border-white/10 ${headerClassName ?? ''}`} {...restHeaderProps}>
-        {[
+      <div role="tablist" aria-label="Key details" className={`flex border-b border-white/10 ${headerClassName ?? ''}`} {...restHeaderProps}>
+        {([
           { id: 'guitar', label: 'Chord Chart' },
           { id: 'subs', label: 'Substitutions' },
           { id: 'chords', label: 'Progressions' },
-        ].map((tab) => (
+        ] as const).map((tab, index, tabs) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-1 py-4 text-sm font-semibold tracking-wide transition-all focus:outline-none relative overflow-hidden ${
+            role="tab"
+            id={`${panelId}-tab-${tab.id}`}
+            aria-selected={activeTab === tab.id}
+            aria-controls={`${panelId}-panel`}
+            tabIndex={activeTab === tab.id ? 0 : -1}
+            onKeyDown={event => {
+              const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null;
+              if (next === null) return;
+              event.preventDefault();
+              setActiveTab(tabs[next].id);
+              document.getElementById(`${panelId}-tab-${tabs[next].id}`)?.focus();
+            }}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 py-4 text-sm font-semibold tracking-wide transition-all relative overflow-hidden ${
               activeTab === tab.id
                 ? 'text-cyan-400 bg-white/5'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]'
@@ -71,6 +85,10 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
       {/* Content */}
       <div
         ref={contentRef}
+        role="tabpanel"
+        id={`${panelId}-panel`}
+        aria-labelledby={`${panelId}-tab-${activeTab}`}
+        tabIndex={0}
         className={`p-4 md:p-6 overflow-y-auto no-scrollbar flex-1 bg-gradient-to-b from-transparent to-slate-900/30 ${contentClassName ?? ''}`}
         {...restContentProps}
       >
@@ -78,7 +96,7 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
           <div className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]"></span>
-              Progressions in {currentKey.major}
+              Progressions in {selectedKeyLabel}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {chords.map((chord, i) => (
@@ -103,27 +121,12 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
               </div>
               <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-widest text-slate-500">
                 <div className="flex items-center gap-2">
-                  <span>Scale</span>
-                  <div className="flex rounded-full border border-white/10 bg-slate-900/60 overflow-hidden">
-                    {(['major', 'minor'] as Tonality[]).map((mode) => (
-                      <button
-                        key={mode}
-                        onClick={() => setTonality(mode)}
-                        className={`px-3 py-1 transition-all ${
-                          tonality === mode ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        {mode}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
                   <span>Complexity</span>
                   <div className="flex rounded-full border border-white/10 bg-slate-900/60 overflow-hidden">
                     {(['common', 'advanced', 'all'] as const).map((level) => (
                       <button
                         key={level}
+                        aria-pressed={complexityFilter === level}
                         onClick={() => setComplexityFilter(level)}
                         className={`px-3 py-1 transition-all ${
                           complexityFilter === level
@@ -149,6 +152,8 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
                   >
                     <button
                       onClick={() => toggleDegree(entry.degree)}
+                      aria-expanded={isOpen}
+                      aria-controls={`${panelId}-degree-${entry.degree}`}
                       className="w-full text-left p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 hover:bg-slate-800/60 transition-colors"
                     >
                       <div>
@@ -163,7 +168,7 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
                       </div>
                     </button>
                     {isOpen && (
-                      <div className="px-4 pb-4 space-y-4">
+                      <div id={`${panelId}-degree-${entry.degree}`} className="px-4 pb-4 space-y-4">
                         {entry.groups.map((group) => {
                           const filtered = group.items.filter((item) =>
                             complexityFilter === 'all' ? true : item.complexity === complexityFilter
@@ -213,22 +218,7 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
                   <span className="text-cyan-300 font-semibold">{selectedKeyLabel}</span>
                 </p>
               </div>
-              <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-slate-500">
-                <span>Scale</span>
-                <div className="flex rounded-full border border-white/10 bg-slate-900/60 overflow-hidden">
-                  {(['major', 'minor'] as Tonality[]).map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() => setTonality(mode)}
-                      className={`px-3 py-1 transition-all ${
-                        tonality === mode ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      {mode}
-                    </button>
-                  ))}
-                </div>
-              </div>
+
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
