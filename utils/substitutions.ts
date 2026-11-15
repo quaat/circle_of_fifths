@@ -1,4 +1,7 @@
 import { SpellingMode, Tonality } from '../types';
+import { ChordQuality, createDiatonicChords as buildDiatonicChords, formatChord, noteToPc, parseNoteName, spellNoteFromDegree, stripMinorSuffix } from './theory';
+const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const FLAT_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
 type FunctionFamily = 'Tonic' | 'Predominant' | 'Dominant';
 
@@ -24,95 +27,12 @@ export interface DegreeSubstitutions {
   groups: SubstitutionGroup[];
 }
 
-const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-const NATURAL_PCS: Record<string, number> = {
-  C: 0,
-  D: 2,
-  E: 4,
-  F: 5,
-  G: 7,
-  A: 9,
-  B: 11,
-};
-
-const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
-const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10];
-
-const MAJOR_ROMAN = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
-const MINOR_ROMAN = ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'];
-
-const MAJOR_QUALITIES: ChordQuality[] = ['major', 'minor', 'minor', 'major', 'major', 'minor', 'diminished'];
-const MINOR_QUALITIES: ChordQuality[] = ['minor', 'diminished', 'major', 'minor', 'minor', 'major', 'major'];
-
-type ChordQuality = 'major' | 'minor' | 'diminished' | 'dominant' | 'diminished7';
-
-const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const FLAT_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
-
-const normalizeDiff = (diff: number) => {
-  let adjusted = diff;
-  while (adjusted > 6) adjusted -= 12;
-  while (adjusted < -6) adjusted += 12;
-  return adjusted;
-};
-
-const diffToAccidental = (diff: number) => {
-  if (diff === 0) return '';
-  if (diff === 1) return '#';
-  if (diff === 2) return '##';
-  if (diff === -1) return 'b';
-  if (diff === -2) return 'bb';
-  return diff > 0 ? '#'.repeat(diff) : 'b'.repeat(Math.abs(diff));
-};
-
-const parseNoteName = (note: string) => {
-  const clean = note.replace(/m$/, '');
-  const match = clean.match(/^([A-G])([b#]{0,2})/);
-  if (!match) {
-    return { letter: 'C', accidental: '' };
-  }
-  return { letter: match[1], accidental: match[2] };
-};
-
-const noteToPc = (note: string) => {
-  const { letter, accidental } = parseNoteName(note);
-  const base = NATURAL_PCS[letter];
-  const offset = accidental.split('').reduce((sum, char) => sum + (char === '#' ? 1 : -1), 0);
-  return (base + offset + 12) % 12;
-};
-
-const spellNoteFromDegree = (tonic: string, interval: number, degree: number) => {
-  const { letter } = parseNoteName(tonic);
-  const tonicPc = noteToPc(tonic);
-  const tonicIndex = LETTERS.indexOf(letter);
-  const targetLetter = LETTERS[(tonicIndex + degree - 1) % LETTERS.length];
-  const naturalPc = NATURAL_PCS[targetLetter];
-  const desiredPc = (tonicPc + interval + 12) % 12;
-  const diff = normalizeDiff(desiredPc - naturalPc);
-  return `${targetLetter}${diffToAccidental(diff)}`;
-};
-
 const spellNoteFromPc = (pc: number, spellingMode: SpellingMode, tonic: string) => {
   if (spellingMode === SpellingMode.Sharps) return SHARP_NAMES[pc];
   if (spellingMode === SpellingMode.Flats) return FLAT_NAMES[pc];
   const { accidental } = parseNoteName(tonic);
-  const preferSharps = accidental.includes('#');
+  const preferSharps = accidental > 0;
   return preferSharps ? SHARP_NAMES[pc] : FLAT_NAMES[pc];
-};
-
-const formatChord = (root: string, quality: ChordQuality) => {
-  switch (quality) {
-    case 'minor':
-      return `${root}m`;
-    case 'diminished':
-      return `${root}dim`;
-    case 'diminished7':
-      return `${root}dim7`;
-    case 'dominant':
-      return `${root}7`;
-    default:
-      return root;
-  }
 };
 
 const getFunctionFamily = (tonality: Tonality, degreeIndex: number): FunctionFamily => {
@@ -126,25 +46,7 @@ const getFunctionFamily = (tonality: Tonality, degreeIndex: number): FunctionFam
   return 'Dominant';
 };
 
-// Build diatonic triads using scale-degree letter spelling so enharmonics stay consistent.
-const createDiatonicChords = (tonic: string, tonality: Tonality) => {
-  const intervals = tonality === 'major' ? MAJOR_INTERVALS : MINOR_INTERVALS;
-  const roman = tonality === 'major' ? MAJOR_ROMAN : MINOR_ROMAN;
-  const qualities = tonality === 'major' ? MAJOR_QUALITIES : MINOR_QUALITIES;
-
-  return intervals.map((interval, index) => {
-    const root = spellNoteFromDegree(tonic, interval, index + 1);
-    const quality = qualities[index];
-    return {
-      degree: roman[index],
-      degreeIndex: index,
-      root,
-      quality,
-      chordName: formatChord(root, quality),
-      functionFamily: getFunctionFamily(tonality, index),
-    };
-  });
-};
+const createDiatonicChords = (tonic: string, tonality: Tonality) => buildDiatonicChords(stripMinorSuffix(tonic), tonality).map(chord => ({ ...chord, functionFamily: getFunctionFamily(tonality, chord.degreeIndex) }));
 
 // Function-family swaps: tonic (I/vi/iii), predominant (ii/IV), dominant (V/vii°).
 const buildDiatonicAlternatives = (
@@ -195,7 +97,7 @@ const buildSecondaryDominants = (
         resolvesTo: `resolves to ${chord.degree}.`,
         complexity: 'advanced',
       },
-    ].filter(Boolean),
+    ],
   };
 };
 

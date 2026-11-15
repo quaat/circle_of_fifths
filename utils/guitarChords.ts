@@ -1,3 +1,4 @@
+import { getScaleNotes, MAJOR_INTERVALS, MINOR_INTERVALS, MAJOR_ROMAN as ROMAN_MAJOR, MINOR_ROMAN as ROMAN_MINOR, normalizePitch, stripMinorSuffix } from './theory';
 import { CurrentKeyData, SpellingMode, Tonality, DiatonicChordDiagram, ChordDiagramShape } from '../types';
 
 type PitchClass = number;
@@ -25,23 +26,6 @@ const STANDARD_TUNING: PitchClass[] = [4, 9, 2, 7, 11, 4]; // E A D G B E (low -
 const TOTAL_FRETS = 12;
 const WINDOW_FRET_SPAN = 3;
 
-const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
-const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10];
-
-const ROMAN_MAJOR = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
-const ROMAN_MINOR = ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'];
-
-const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
-const LETTER_TO_PC: Record<(typeof LETTERS)[number], PitchClass> = {
-  C: 0,
-  D: 2,
-  E: 4,
-  F: 5,
-  G: 7,
-  A: 9,
-  B: 11,
-};
-
 const PREFERRED_SHAPES: Record<string, { frets: FretValue[]; fingers: Array<number | null> }> = {
   C: { frets: ['x', 3, 2, 0, 1, 0], fingers: [null, 3, 2, null, 1, null] },
   D: { frets: ['x', 'x', 0, 2, 3, 2], fingers: [null, null, null, 1, 3, 2] },
@@ -54,47 +38,6 @@ const PREFERRED_SHAPES: Record<string, { frets: FretValue[]; fingers: Array<numb
   F: { frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1] },
   Bm: { frets: ['x', 2, 4, 4, 3, 2], fingers: [null, 1, 3, 4, 2, 1] },
   B: { frets: ['x', 2, 4, 4, 4, 2], fingers: [null, 1, 3, 3, 3, 1] },
-};
-
-const normalizePitch = (value: number): PitchClass => ((value % 12) + 12) % 12;
-
-const stripMinorSuffix = (note: string): string => (note.endsWith('m') ? note.slice(0, -1) : note);
-
-const parseNoteName = (note: string) => {
-  const trimmed = note.trim();
-  const letter = trimmed[0].toUpperCase() as (typeof LETTERS)[number];
-  const accidentalPart = trimmed.slice(1);
-  let accidental = 0;
-  for (const char of accidentalPart) {
-    if (char === '#') accidental += 1;
-    if (char === 'b') accidental -= 1;
-  }
-  const pitchClass = normalizePitch(LETTER_TO_PC[letter] + accidental);
-  return { letter, accidental, pitchClass };
-};
-
-const formatAccidental = (value: number): string => {
-  if (value === 0) return '';
-  if (value > 0) return '#'.repeat(value);
-  return 'b'.repeat(Math.abs(value));
-};
-
-const getScaleNotes = (rootName: string, intervals: number[]) => {
-  const { letter: rootLetter, pitchClass: rootPc } = parseNoteName(rootName);
-  const rootIndex = LETTERS.indexOf(rootLetter);
-
-  return intervals.map((interval, degree) => {
-    const letterIndex = (rootIndex + degree) % 7;
-    const letter = LETTERS[letterIndex];
-    const targetPc = normalizePitch(rootPc + interval);
-    const basePc = LETTER_TO_PC[letter];
-    const diff = normalizePitch(targetPc - basePc);
-    const accidental = diff <= 6 ? diff : diff - 12;
-    return {
-      name: `${letter}${formatAccidental(accidental)}`,
-      pitchClass: targetPc,
-    };
-  });
 };
 
 const getChordQuality = (intervals: number[]) => {

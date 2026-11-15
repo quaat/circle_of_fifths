@@ -1,22 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { SpellingMode, KeyDefinition } from '../types';
-import { getKeyLabel } from '../utils/musicTheory';
-
-// Raw data import for rendering labels on the ring
-const CIRCLE_LABELS: KeyDefinition[] = [
-  { major: ['C'], minor: ['Am'] },
-  { major: ['G'], minor: ['Em'] },
-  { major: ['D'], minor: ['Bm'] },
-  { major: ['A'], minor: ['F#m'] },
-  { major: ['E'], minor: ['C#m'] },
-  { major: ['B'], minor: ['G#m'] },
-  { major: ['F#', 'Gb'], minor: ['D#m', 'Ebm'] },
-  { major: ['Db', 'C#'], minor: ['Bbm'] }, // Order swapped for rendering pref in auto
-  { major: ['Ab'], minor: ['Fm'] },
-  { major: ['Eb'], minor: ['Cm'] },
-  { major: ['Bb'], minor: ['Gm'] },
-  { major: ['F'], minor: ['Dm'] },
-];
+import { SpellingMode } from '../types';
+import { getKeyDataAtIndex } from '../utils/musicTheory';
 
 interface DialProps {
   rotation: number;
@@ -122,9 +106,9 @@ export const Dial: React.FC<DialProps> = ({ rotation, setRotation, onDragEnd, sp
       // User asked for "Readable". Usually upright relative to the viewer is best, but difficult on a spinning wheel.
       // Standard circle of fifths wheels often have text aligned radially.
       
-      const labelData = CIRCLE_LABELS[i];
-      const majorLabel = getKeyLabel(labelData.major, i, spellingMode);
-      const minorLabel = getKeyLabel(labelData.minor, i, spellingMode);
+      const labelData = getKeyDataAtIndex(i, spellingMode);
+      const majorLabel = labelData.major;
+      const minorLabel = labelData.minor;
 
       segments.push(
         <g key={`text-${i}`}>
