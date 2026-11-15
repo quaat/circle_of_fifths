@@ -206,7 +206,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ children, initialState
 
   return (
     <div
-      className="fixed left-0 right-0 bottom-0 z-20"
+      className="fixed left-0 right-0 bottom-0 z-40"
       style={{
         transform: `translateY(${translateY}px)`,
         transition: isDragging ? 'none' : 'transform 220ms ease-out',
